@@ -1,0 +1,5 @@
+env.secret
+out*
+settings.json
+*.cpython*
+session-data.tmp
