@@ -25,7 +25,12 @@ from mapping import Mapping
 
 load_dotenv('./env.secret')
 
-settings = {'insta_api': {}, 'twitter_cursors': {}, 'insta_cursors': {}}
+settings = {
+    'insta_api': {},
+    'twitter_cursors': {},
+    'insta_cursors': {},
+    'tiktok_cursors': {}
+}
 
 
 # helper functions
@@ -112,6 +117,20 @@ except:
 # save insta followers to csv with auto-retry
 def get_insta_followers(cooldown=60):
     try:
+        followers = []
+        current = 0
+        chunk_size = 5
+
+        args = {
+            'user_id': opts['<user_id>'],
+            'rank_token': Client.generate_uuid(),
+        }
+
+        # load cursor from save if needed
+        if settings['insta_cursors'].get(
+                'next_max_id') and opts['--load-cursor']:
+            args['max_id'] = settings['insta_cursors']['next_max_id']
+
         for results in pagination.page(instapi.user_followers, args=args):
             current += 1
             args['max_id'] = results['next_max_id']
@@ -147,9 +166,9 @@ def get_insta_followers(cooldown=60):
 
                     sleep(1)
 
-                # write to file or print
                 settings['insta_cursors'] = {'next_max_id': args['max_id']}
                 update_settings_file()
+                # write to file or print
                 if not is_inspecting:
                     new_file = not os.path.isfile(opts['<output>'])
                     with open(opts['<output>'], 'a', encoding='UTF8') as f:
@@ -176,6 +195,66 @@ def get_insta_followers(cooldown=60):
         get_insta_followers(cooldown + 60)
 
 
+def get_tiktok_followers(cooldown=60, max_time='0'):
+    try:
+        args = {
+            'user_id': opts['<user_id>'],
+            'count': 100,
+            'max_time': max_time,
+        }
+
+        # load cursor from save if needed
+        if settings['tiktok_cursors'].get(
+                'max_time') and opts['--load-cursor']:
+            args['max_time'] = settings['tiktok_cursors']['max_time']
+            max_time = args['max_time']
+
+        # request from https://rapidapi.com/contact-cmWXEDTql/api/scraptik/
+        resp = requests.request('GET',
+                                tiktok_api_url,
+                                headers={
+                                    'X-RapidAPI-Key':
+                                    os.getenv('RAPIDAPI_KEY'),
+                                    'X-RapidAPI-Host':
+                                    'scraptik.p.rapidapi.com'
+                                },
+                                params=args)
+        data = resp.json()
+        followers = data['followers']
+        has_more = data['has_more']
+        min_time = data['min_time']
+
+        print("Scraping from max_time:\t{0}\nmin_time:\t{1}\n".format(
+            max_time, min_time))
+
+        # write to file or print
+        if not is_inspecting:
+            new_file = not os.path.isfile(opts['<output>'])
+            with open(opts['<output>'], 'a', encoding='UTF8') as f:
+                writer = csv.DictWriter(
+                    f, fieldnames=Mapping.aggregate_field_names(followers))
+                if new_file:
+                    writer.writeheader()
+                for row in followers:
+                    writer.writerow(row)
+
+            settings['tiktok_cursors']['max_time'] = min_time
+            update_settings_file()
+
+            if has_more:
+                sleep(5)
+                get_tiktok_followers(max_time=min_time)
+            else:
+                print('Finished TikTok scraping. Stopping...')
+        else:
+            print(Mapping.aggregate_field_names(data['followers']))
+    except Exception as e:
+        print('TikTok error:', e)
+        print('Timed out. Sleeping for {0} minutes...'.format(cooldown))
+        sleep(60 * cooldown)
+        get_tiktok_followers(cooldown + 60)
+
+
 # parse options & run jobs
 if __name__ == '__main__':
     opts = docopt(__doc__, version='Social Info 1.0')
@@ -184,20 +263,6 @@ if __name__ == '__main__':
     if opts['followers']:
         # for instagram
         if opts['instagram']:
-            followers = []
-            current = 0
-            chunk_size = 5
-            cursor = 'max_id'
-            args = {
-                'user_id': opts['<user_id>'],
-                'rank_token': Client.generate_uuid(),
-            }
-
-            # load cursor from save if needed
-            if settings['insta_cursors'].get(
-                    'next_max_id') and opts['--load-cursor']:
-                args['max_id'] = settings['insta_cursors']['next_max_id']
-
             # paginate through <user_id>'s followers
             get_insta_followers()
         # for twitter
@@ -273,31 +338,4 @@ if __name__ == '__main__':
 
         # for tiktok (in-progress)
         elif opts['tiktok']:
-            resp = requests.request('GET',
-                                    tiktok_api_url,
-                                    headers={
-                                        'X-RapidAPI-Key':
-                                        os.getenv('RAPIDAPI_KEY'),
-                                        'X-RapidAPI-Host':
-                                        'scraptik.p.rapidapi.com'
-                                    },
-                                    params={
-                                        'user_id': opts['<user_id>'],
-                                        'count': 100,
-                                        'max_time': '0'
-                                    })
-            data = resp.json()
-            followers = data['followers']
-
-            # write to file or print
-            if not is_inspecting:
-                new_file = not os.path.isfile(opts['<output>'])
-                with open(opts['<output>'], 'a', encoding='UTF8') as f:
-                    writer = csv.DictWriter(
-                        f, fieldnames=Mapping.aggregate_field_names(followers))
-                    if new_file:
-                        writer.writeheader()
-                    for row in followers:
-                        writer.writerow(row)
-            else:
-                print(Mapping.aggregate_field_names(data['followers']))
+            get_tiktok_followers()
