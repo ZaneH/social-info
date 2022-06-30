@@ -195,6 +195,74 @@ def get_insta_followers(cooldown=60):
         get_insta_followers(cooldown + 60)
 
 
+def get_twitter_followers():
+    current = 0
+
+    # paginate through <user_id>'s followers
+    cursor = None
+    if opts['--load-cursor']:
+        if settings['twitter_cursors'].get('next_cursor'):
+            cursor = settings['twitter_cursors']['next_cursor']
+
+    for results in tweepy.Paginator(twitter_api.get_users_followers,
+                                    opts['<user_id>'],
+                                    user_fields='verified,public_metrics',
+                                    pagination_token=cursor,
+                                    limit=100):
+        meta = results.meta
+        next_cursor = meta['next_token']
+        prev_cursor = None
+        if meta.get('previous_token'):
+            prev_cursor = meta['previous_token']
+
+        current += 1
+        print("Scraping page:\t{0}\nprev_cursor:\t{1}\nnext_cursor:\t{2}\n".
+              format(current, prev_cursor, next_cursor))
+
+        settings['twitter_cursors'] = {
+            'next_cursor': next_cursor,
+            'prev_cursor': prev_cursor
+        }
+
+        update_settings_file()
+
+        # write to file or print
+        if not is_inspecting:
+            new_file = not os.path.isfile(opts['<output>'])
+            with open(opts['<output>'], 'a', encoding='UTF8') as f:
+                writer = csv.DictWriter(f,
+                                        fieldnames=[
+                                            'id', 'username',
+                                            'followers_count',
+                                            'following_count', 'tweet_count',
+                                            'listed_count', 'verified'
+                                        ])
+                if new_file:
+                    writer.writeheader()
+                for user in results.data:
+                    data = user.data
+                    metrics = data['public_metrics']
+                    writer.writerow({
+                        'id':
+                        user.data['id'],
+                        'username':
+                        user.data['username'],
+                        'followers_count':
+                        metrics['followers_count'],
+                        'following_count':
+                        metrics['following_count'],
+                        'tweet_count':
+                        metrics['tweet_count'],
+                        'listed_count':
+                        metrics['listed_count'],
+                        'verified':
+                        data['verified']
+                    })
+
+        # delay
+        sleep(1)
+
+
 def get_tiktok_followers(cooldown=60, max_time='0'):
     try:
         args = {
@@ -263,79 +331,10 @@ if __name__ == '__main__':
     if opts['followers']:
         # for instagram
         if opts['instagram']:
-            # paginate through <user_id>'s followers
             get_insta_followers()
         # for twitter
         elif opts['twitter']:
-            current = 0
-
-            # paginate through <user_id>'s followers
-            cursor = None
-            if opts['--load-cursor']:
-                if settings['twitter_cursors'].get('next_cursor'):
-                    cursor = settings['twitter_cursors']['next_cursor']
-
-            for results in tweepy.Paginator(
-                    twitter_api.get_users_followers,
-                    opts['<user_id>'],
-                    user_fields='verified,public_metrics',
-                    pagination_token=cursor,
-                    limit=100):
-                meta = results.meta
-                next_cursor = meta['next_token']
-                prev_cursor = None
-                if meta.get('previous_token'):
-                    prev_cursor = meta['previous_token']
-
-                current += 1
-                print(
-                    "Scraping page:\t{0}\nprev_cursor:\t{1}\nnext_cursor:\t{2}\n"
-                    .format(current, prev_cursor, next_cursor))
-
-                settings['twitter_cursors'] = {
-                    'next_cursor': next_cursor,
-                    'prev_cursor': prev_cursor
-                }
-
-                update_settings_file()
-
-                # write to file or print
-                if not is_inspecting:
-                    new_file = not os.path.isfile(opts['<output>'])
-                    with open(opts['<output>'], 'a', encoding='UTF8') as f:
-                        writer = csv.DictWriter(f,
-                                                fieldnames=[
-                                                    'id', 'username',
-                                                    'followers_count',
-                                                    'following_count',
-                                                    'tweet_count',
-                                                    'listed_count', 'verified'
-                                                ])
-                        if new_file:
-                            writer.writeheader()
-                        for user in results.data:
-                            data = user.data
-                            metrics = data['public_metrics']
-                            writer.writerow({
-                                'id':
-                                user.data['id'],
-                                'username':
-                                user.data['username'],
-                                'followers_count':
-                                metrics['followers_count'],
-                                'following_count':
-                                metrics['following_count'],
-                                'tweet_count':
-                                metrics['tweet_count'],
-                                'listed_count':
-                                metrics['listed_count'],
-                                'verified':
-                                data['verified']
-                            })
-
-                # delay
-                sleep(1)
-
-        # for tiktok (in-progress)
+            get_twitter_followers()
+        # for tiktok
         elif opts['tiktok']:
             get_tiktok_followers()
