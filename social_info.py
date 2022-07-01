@@ -2,9 +2,9 @@
 """Social Info
 
 Usage:
-    social_info.py instagram followers <user_id> [--inspect | --load-cursor] [<output>]
-    social_info.py twitter followers <user_id> [--inspect | --load-cursor] [<output>]
-    social_info.py tiktok followers <user_id> [--inspect | --load-cursor] [<output>]
+    social_info.py instagram followers <user_id> [--inspect | --load-cursor] [<output.csv>]
+    social_info.py twitter followers <user_id> [--inspect | --load-cursor] [<output.csv>]
+    social_info.py tiktok followers <user_id> [--inspect | --load-cursor] [<output.csv>]
     social_info.py (-h | --help)
 
 Options:
@@ -170,8 +170,8 @@ def get_insta_followers(cooldown=60):
                 update_settings_file()
                 # write to file or print
                 if not is_inspecting:
-                    new_file = not os.path.isfile(opts['<output>'])
-                    with open(opts['<output>'], 'a', encoding='UTF8') as f:
+                    new_file = not os.path.isfile(opts['<output.csv>'])
+                    with open(opts['<output.csv>'], 'a', encoding='UTF8') as f:
                         headers = Mapping.aggregate_field_names(followers)
                         headers.extend([
                             'follower_count', 'following_count',
@@ -228,8 +228,8 @@ def get_twitter_followers():
 
         # write to file or print
         if not is_inspecting:
-            new_file = not os.path.isfile(opts['<output>'])
-            with open(opts['<output>'], 'a', encoding='UTF8') as f:
+            new_file = not os.path.isfile(opts['<output.csv>'])
+            with open(opts['<output.csv>'], 'a', encoding='UTF8') as f:
                 writer = csv.DictWriter(f,
                                         fieldnames=[
                                             'id', 'username',
@@ -297,8 +297,8 @@ def get_tiktok_followers(cooldown=60, max_time='0'):
 
         # write to file or print
         if not is_inspecting:
-            new_file = not os.path.isfile(opts['<output>'])
-            with open(opts['<output>'], 'a', encoding='UTF8') as f:
+            new_file = not os.path.isfile(opts['<output.csv>'])
+            with open(opts['<output.csv>'], 'a', encoding='UTF8') as f:
                 writer = csv.DictWriter(
                     f, fieldnames=Mapping.aggregate_field_names(followers))
                 if new_file:
